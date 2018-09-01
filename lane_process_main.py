@@ -29,15 +29,17 @@ elif photo_mode:
 
 mtx, dist = calibrate_camera("camera_cal", 9, 6, False)
 
+lane_extractor = LaneExtractor()
+
 for image in gen:
 
     image_undist = cv2.undistort(image, mtx, dist, None, mtx)
 
     image_white_and_yellow_bin = get_yellow_and_white(image_undist)
 
-    ptrans_image = perspective_tf_lane_lines(image_white_and_yellow_bin)
+    ptrans_image, M, Minv = perspective_tf_lane_lines(image_white_and_yellow_bin)
 
-    lane_image = extract_lanes(ptrans_image)
+    # lane_image = extract_lanes(ptrans_image)
 
     print("done")
 
@@ -83,9 +85,32 @@ for image in gen:
 
     elif video_mode:
         image_undist_bgr = cv2.cvtColor(image_undist, cv2.COLOR_RGB2BGR)
+
+        debug_image = lane_extractor.process_image(ptrans_image)
+
+        left_lane_exists, left_lane = lane_extractor.left_lane()
+
+        right_lane_exists, right_lane = lane_extractor.right_lane()
+
+        lane_lines_p_frame = np.zeros_like(image_undist_bgr)
+
+        if left_lane_exists:
+            draw_poly(lane_lines_p_frame, left_lane, width=20)
+
+        if right_lane_exists:
+            draw_poly(lane_lines_p_frame, right_lane, width=20)
+
+        lanes_orig_frame = \
+            cv2.warpPerspective(lane_lines_p_frame, Minv, lane_lines_p_frame.shape[1::-1], cv2.INTER_LINEAR)
+
+        lanes_orig_frame = cv2.addWeighted(image_undist_bgr, 1.0, lanes_orig_frame, 1.0, 0.0)
+
         cv2.imshow("image", image_undist_bgr)
         cv2.imshow("image_white_and_yellow_bin", image_white_and_yellow_bin*255.0)
         cv2.imshow("perspective transform", ptrans_image*255.0)
-        cv2.imshow("lanes image", lane_image)
+        cv2.imshow("debug_image", debug_image*255.0)
+        cv2.imshow("lanes_orig_frame", lanes_orig_frame)
+        # cv2.imshow("drawn_lines_img_unperspective", drawn_lane_lines_unperspective)
+        # cv2.imshow("lanes image", lane_image)
         
         cv2.waitKey(10)

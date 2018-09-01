@@ -4,6 +4,12 @@ import matplotlib.pyplot as plt
 
 from image_generators import *
 
+from collections import deque
+
+import pprint
+
+pp = pprint.PrettyPrinter(indent=4)
+
 def get_yellow_and_white(image):
 
     hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
@@ -134,97 +140,141 @@ def perspective_tf_lane_lines(image):
 
     M = cv2.getPerspectiveTransform(src, dst)
 
+    Minv = cv2.getPerspectiveTransform(dst, src)
+
     warped = cv2.warpPerspective(image, M, image.shape[::-1], flags=cv2.INTER_LINEAR)
 
-    return warped
+    return warped, M, Minv
 
-def draw_poly(image, poly_row_to_col):
+def draw_poly(image, poly_row_to_col, width=1):
 
     for row in range(image.shape[0]-1):
         col = int(np.polyval(poly_row_to_col, row))
         col2 = int(np.polyval(poly_row_to_col, row + 1))
 
-        cv2.line(image, (col, row), (col2, row + 1), (0, 255, 0))
+        cv2.line(image, (col, row), (col2, row + 1), (0, 255, 0), thickness=width)
 
+def average_lane_buffer_order_2(buffer):
 
+    buff_sum = np.array([0,0,0], dtype=np.float32)
 
-def extract_lanes(image):
+    for lane in buffer:
+        for i in range(3):
+            buff_sum[i] = float(buff_sum[i]) + float(lane[i])
     
-    n_histo = 12 #number of histograms
-    win_width = 40  #width of the sliding window
-    req_frac = 0.5  #required fraction of the vertical slice that must be filled to be a max
+    L = float(len(buffer))
 
-    img_rows = image.shape[0]
-    img_cols = image.shape[1]
+    buff_avg = [ float(buff_sum[0]) / L, float(buff_sum[1]) / L, float(buff_sum[2]) / L]
 
-    histo_height = int(img_rows / n_histo)
+    pp.pprint(buffer)
+    pp.pprint(buff_sum)
+    pp.pprint(buff_avg)
 
-    print('histo_height: ', histo_height)
+    return buff_avg
 
-    histo_mps_left = []
-    histo_mps_right = []
+class LaneExtractor(object):
 
-    image_with_lines = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    def __init__(self):
+        self.n_histo = 12 #number of histograms
+        self.win_width = 80  #width of the sliding window
+        self.req_frac = 0.5  #required fraction of the vertical slice that must be filled to be a max
 
-    for start_row in range(img_rows - 1, -1, -histo_height):
-        print ("computing histo")
-        end_row = start_row - histo_height + 1
-        print("start_row: ", start_row)
-        print("end_row: ", end_row)
-        print("image_shape: ", image.shape)
-        #print("image: ", image[start_row:end_row, :])
-        histo = np.sum(image[end_row:start_row, :], axis=0)
+        self.average_len = 10
 
-        histo_mp = histo.shape[0] // 2
+        self.left_lane_buffer = deque(maxlen=self.average_len)
+        self.right_lane_buffer = deque(maxlen=self.average_len)
 
-        max_col_left = np.argmax(histo[:histo_mp])
-        max_col_right = np.argmax(histo[histo_mp:]) + histo_mp
-
-        cnt_max_left = histo[max_col_left]
-        cnt_max_right = histo[max_col_right]
-
-        left_found = max_col_left != 0 and cnt_max_left >= int(req_frac * histo_height)
-        right_found = max_col_right != histo_mp and cnt_max_right >= int(req_frac * histo_height)
-
-        if left_found:
-            max_col_left = max(win_width // 2, max_col_left)
-            cv2.rectangle(image_with_lines, (max_col_left - win_width // 2, start_row), (max_col_left +  win_width // 2, end_row), (255,0,0))
-            histo_mps_left.append([(start_row + end_row) // 2, max_col_left]) #row, column
-
-        if right_found:
-            max_col_right = min(img_cols - 1 - win_width // 2, max_col_right)
-            cv2.rectangle(image_with_lines, (max_col_right - win_width // 2, start_row), (max_col_right +  win_width // 2, end_row), (0,0,255))
-            histo_mps_right.append([(start_row + end_row) // 2, max_col_right]) #row, column
+    def process_image(self, image):
         
+        image = image.copy()
+
+        img_rows = image.shape[0]
+        img_cols = image.shape[1]
+
+        histo_height = int(img_rows / self.n_histo)
+
+        print('histo_height: ', histo_height)
+
+        histo_mps_left = []
+        histo_mps_right = []
+
+        image_with_lines = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+
+        for start_row in range(img_rows - 1, -1, -histo_height):
+            print ("computing histo")
+            end_row = start_row - histo_height + 1
+            print("start_row: ", start_row)
+            print("end_row: ", end_row)
+            print("image_shape: ", image.shape)
+            #print("image: ", image[start_row:end_row, :])
+            histo = np.sum(image[end_row:start_row, :], axis=0)
+
+            histo_mp = histo.shape[0] // 2
+
+            max_col_left = np.argmax(histo[:histo_mp])
+            max_col_right = np.argmax(histo[histo_mp:]) + histo_mp
+
+            cnt_max_left = histo[max_col_left]
+            cnt_max_right = histo[max_col_right]
+
+            left_found = None
+
+            if len(histo_mps_left) == 0:
+                left_found = max_col_left != 0 and cnt_max_left >= int(self.req_frac * histo_height)
+            else:
+                left_found = max_col_left != 0 and cnt_max_left >= int(self.req_frac * histo_height) and abs(max_col_left - histo_mps_left[-1][1]) < self.win_width // 2
+
+            right_found = max_col_right != histo_mp and cnt_max_right >= int(self.req_frac * histo_height)
+
+            print("left found? : ", left_found)
+
+            if left_found:
+                
+                max_col_left = max(self.win_width // 2, max_col_left)
+                cv2.rectangle(image_with_lines, (max_col_left - self.win_width // 2, start_row), (max_col_left +  self.win_width // 2, end_row), (255,0,0))
+                histo_mps_left.append([(start_row + end_row) // 2, max_col_left]) #row, column
+
+                
+            if right_found:
+
+                max_col_right = min(img_cols - 1 - self.win_width // 2, max_col_right)
+                cv2.rectangle(image_with_lines, (max_col_right - self.win_width // 2, start_row), (max_col_right +  self.win_width // 2, end_row), (0,0,255))
+                histo_mps_right.append([(start_row + end_row) // 2, max_col_right]) #row, column
+
+                
+        if len(histo_mps_left) > 2:
         
+            for i in range(len(histo_mps_left) - 1):
+                cv2.line(image_with_lines, tuple(histo_mps_left[i][::-1]), tuple(histo_mps_left[i+1][::-1]), (255,0,0))
 
-    for i in range(len(histo_mps_left) - 1):
-        cv2.line(image_with_lines, tuple(histo_mps_left[i][::-1]), tuple(histo_mps_left[i+1][::-1]), (255,0,0))
+            histo_mps_left = np.array(histo_mps_left)
+            left_poly = np.polyfit(histo_mps_left[:,0], histo_mps_left[:,1], 2) # polynomial maps row to column
+            draw_poly(image_with_lines, left_poly)
+            self.left_lane_buffer.append(left_poly)
 
-    for i in range(len(histo_mps_right) - 1):
-        cv2.line(image_with_lines, tuple(histo_mps_right[i][::-1]), tuple(histo_mps_right[i+1][::-1]), (0,0,255))
+        if len(histo_mps_right) > 2:
 
-    histo_mps_left = np.array(histo_mps_left)
-    histo_mps_right = np.array(histo_mps_right)
+            for i in range(len(histo_mps_right) - 1):
+                cv2.line(image_with_lines, tuple(histo_mps_right[i][::-1]), tuple(histo_mps_right[i+1][::-1]), (0,0,255))
 
-    # polynomial should map row to column
-    left_poly = np.polyfit(histo_mps_left[:,0], histo_mps_left[:,1], 2)
-    right_poly = np.polyfit(histo_mps_right[:,0], histo_mps_right[:,1], 2)
-
-    draw_poly(image_with_lines, left_poly)
-    draw_poly(image_with_lines, right_poly)
-
-    return image_with_lines
-
+            histo_mps_right = np.array(histo_mps_right)
+            right_poly = np.polyfit(histo_mps_right[:,0], histo_mps_right[:,1], 2)
+            draw_poly(image_with_lines, right_poly)
+            self.right_lane_buffer.append(right_poly)
 
 
-        # print("histo: ", histo)
+        return image_with_lines
         
-        # fig = plt.figure
-
-        # plt.plot(histo)
-
-        # plt.show()
-
+    def left_lane(self):
+        if len(self.left_lane_buffer) == 0:
+            return False, None
+        else:
+            return True, average_lane_buffer_order_2(self.left_lane_buffer)
+        
+    def right_lane(self):
+        if len(self.right_lane_buffer) == 0:
+            return False, None
+        else:
+            return True, average_lane_buffer_order_2(self.right_lane_buffer)
 
         
