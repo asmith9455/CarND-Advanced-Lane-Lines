@@ -1,0 +1,12 @@
+road 225, 291, 308
+
+for the road 
+- hue is constant over different lighting conditions, same surface
+- saturation is constant over different surfaces with the same lighting
+
+
+for dark colours (like fresh asphalt) the saturation is high when the lighting is low - the lighting 'washes out' the saturation
+
+for light/reflective colours (like painted reflective yellow lane lines) the saturation is greater under more light (the colours 'pop' more)
+
+
