@@ -62,7 +62,7 @@ for image in gen:
 
     l = hls[:,:,1]
 
-    l = l / np.max(l) * 255.0
+    l = l
 
     s = hls[:,:,2]
 
@@ -73,6 +73,9 @@ for image in gen:
 
     yellow_h = np.zeros_like(h)
     yellow_h[(h >= 20) & (h <= 50)] = 1
+
+    white_l = np.zeros_like(l)
+    white_l[(l >= 200)] = 1
 
     print("done")
 
@@ -110,5 +113,7 @@ for image in gen:
     elif video_mode:
         image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         cv2.imshow("image",  image_bgr)
-        cv2.imshow("image_yellow",  yellow_h*255.0)
+        cv2.imshow("image_yellow_bin",  yellow_h*255.0)
+        cv2.imshow("image_white", l)
+        cv2.imshow("image_white_bin", white_l*255.0)
         cv2.waitKey(10)
