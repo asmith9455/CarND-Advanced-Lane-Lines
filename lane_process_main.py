@@ -37,6 +37,10 @@ for image in gen:
 
     image_white_and_yellow_bin = get_yellow_and_white(image_undist)
 
+    # edges = get_lane_edges(image_undist)
+
+    # image_pp = cv2.bitwise_and(image_white_and_yellow_bin, edges)
+
     ptrans_image, M, Minv = perspective_tf_lane_lines(image_white_and_yellow_bin)
 
     # lane_image = extract_lanes(ptrans_image)
@@ -96,14 +100,35 @@ for image in gen:
 
         if left_lane_exists:
             draw_poly(lane_lines_p_frame, left_lane, width=20)
+            
 
         if right_lane_exists:
             draw_poly(lane_lines_p_frame, right_lane, width=20)
+            ret, right_curv = lane_extractor.right_curvature()
 
-        lanes_orig_frame = \
-            cv2.warpPerspective(lane_lines_p_frame, Minv, lane_lines_p_frame.shape[1::-1], cv2.INTER_LINEAR)
+        
+        lanes_orig_frame = cv2.warpPerspective(lane_lines_p_frame, Minv, lane_lines_p_frame.shape[1::-1], cv2.INTER_LINEAR)
 
         lanes_orig_frame = cv2.addWeighted(image_undist_bgr, 1.0, lanes_orig_frame, 1.0, 0.0)
+
+        # calculate and draw curvature values
+
+        left_curv_exists, left_curv = lane_extractor.left_curvature()
+        right_curv_exists, right_curv = lane_extractor.right_curvature()
+
+        left_text_loc = (int(lanes_orig_frame.shape[1]*0.05), int(lanes_orig_frame.shape[0] * 0.6))
+        right_text_loc = (int(lanes_orig_frame.shape[1]*0.7), int(lanes_orig_frame.shape[0] * 0.6))
+        dist_to_center_loc = (int(lanes_orig_frame.shape[1]*0.2), int(lanes_orig_frame.shape[0] * 0.4))
+
+        if left_curv_exists:
+            cv2.putText(lanes_orig_frame, "left curvature: " + str(round(left_curv,2)), left_text_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
+        
+        if right_curv_exists:
+            cv2.putText(lanes_orig_frame, "right curvature: " + str(round(right_curv,2)), right_text_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
+
+        if left_lane_exists and right_lane_exists:
+            dist_to_center, width = lane_extractor.get_mid_column(image.shape[0] - 1, image.shape[1] // 2)
+            cv2.putText(lanes_orig_frame, "distance to center: " + str(round(dist_to_center,3)) + " [m] width: " + str(round(width,3)) + " [m]" , dist_to_center_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
 
         cv2.imshow("image", image_undist_bgr)
         cv2.imshow("image_white_and_yellow_bin", image_white_and_yellow_bin*255.0)

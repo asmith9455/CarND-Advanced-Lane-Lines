@@ -35,7 +35,19 @@ def get_yellow_and_white(image):
 
     image_white_and_yellow_bin = cv2.bitwise_or(yellow_h, white_l)
 
-    return image_white_and_yellow_bin
+    x_edges = cv2.Sobel(h, cv2.CV_8U, 1, 0, ksize=5)
+
+    image_pp = cv2.bitwise_and(image_white_and_yellow_bin, x_edges)
+
+    image_pp = image_white_and_yellow_bin
+
+    return image_pp
+
+def get_lane_edges(image):
+
+    x_edges = cv2.Sobel(image, cv2.CV_8U, 1, 0, ksize=5)
+
+    return x_edges
 
 def calibrate_camera(directory, nx, ny, show_images=False):
     # directory is the path to a directory containing the calibration (checkerboard) images
@@ -188,6 +200,8 @@ class LaneExtractor(object):
         
         image = image.copy()
 
+        self.shape = image.shape
+
         img_rows = image.shape[0]
         img_cols = image.shape[1]
 
@@ -276,5 +290,61 @@ class LaneExtractor(object):
             return False, None
         else:
             return True, average_lane_buffer_order_2(self.right_lane_buffer)
+
+    def left_curvature(self):
+        ret, lane = self.left_lane()
+
+        px_2_m_col2y = 3.7 / 690.0 # since the lane width is 3.7 m
+        px_2_m_row2x = 40.0 / 720.0  # use the length of a dashed lane line in the transformed image
+
+        if not(ret):
+            return False, 0.0
+        
+        A = lane[0] * px_2_m_col2y / px_2_m_row2x**2    # adjust polynomials such that we move into real world dimensions rather than pixel dimensions
+        B = lane[1] * px_2_m_col2y / px_2_m_row2x       
+        C = lane[2] * px_2_m_col2y
+        
+        row = (self.shape[0] - 1) * px_2_m_col2y
+
+        curv = (1.0 + (2.0*A*row + B )**2.0 )**(1.5) / abs(2.0 * A)
+
+        return True, curv
+
+    def right_curvature(self):
+        ret, lane = self.right_lane()
+
+        px_2_m_col2y = 3.7 / 690.0 # since the lane width is 3.7 m
+        px_2_m_row2x = 40.0 / 720.0  # use the length of a dashed lane line in the transformed image
+
+        if not(ret):
+            return False, 0.0
+        
+        A = lane[0] * px_2_m_col2y / px_2_m_row2x**2    # adjust polynomials such that we move into real world dimensions rather than pixel dimensions
+        B = lane[1] * px_2_m_col2y / px_2_m_row2x
+        C = lane[2] * px_2_m_col2y
+        
+        row = (self.shape[0] - 1) * px_2_m_col2y
+
+        curv = (1.0 + (2.0*A*row + B )**2.0 )**(1.5) / abs(2.0 * A)
+
+        return True, curv
+    
+    def get_mid_column(self, row, center_col):
+
+        # 690 px is 3.7 m
+
+        px_2_m_col2y = 3.7 / 690.0 # since the lane width is 3.7 m
+        px_2_m_row2x = 40.0 / 720.0  # use the length of a dashed lane line in the transformed image
+
+        left_col = int(np.polyval(self.left_lane()[1], row))
+        right_col = int(np.polyval(self.right_lane()[1], row))
+
+        mid_col = (left_col + right_col) // 2
+
+        dist_2_center = (mid_col - center_col) * px_2_m_col2y
+
+        width = abs(right_col - left_col) * px_2_m_col2y
+
+        return dist_2_center, width
 
         
