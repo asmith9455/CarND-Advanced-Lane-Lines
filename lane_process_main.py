@@ -118,18 +118,23 @@ for image in gen:
 
         left_text_loc = (int(lanes_orig_frame.shape[1]*0.05), int(lanes_orig_frame.shape[0] * 0.6))
         right_text_loc = (int(lanes_orig_frame.shape[1]*0.7), int(lanes_orig_frame.shape[0] * 0.6))
-        dist_to_center_loc = (int(lanes_orig_frame.shape[1]*0.2), int(lanes_orig_frame.shape[0] * 0.4))
+        dist_to_center_loc = (int(lanes_orig_frame.shape[1]*0.2), int(lanes_orig_frame.shape[0] * 0.3))
+        avg_curv_loc = (int(lanes_orig_frame.shape[1]*0.2), int(lanes_orig_frame.shape[0] * 0.25))
 
         if left_curv_exists:
-            cv2.putText(lanes_orig_frame, "left curvature: " + str(round(left_curv,2)), left_text_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
+            cv2.putText(lanes_orig_frame, "left curv radius: " + str(round(left_curv,2)), left_text_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
         
         if right_curv_exists:
-            cv2.putText(lanes_orig_frame, "right curvature: " + str(round(right_curv,2)), right_text_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
+            cv2.putText(lanes_orig_frame, "right curv radius: " + str(round(right_curv,2)), right_text_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
 
         if left_lane_exists and right_lane_exists:
             dist_to_center, width = lane_extractor.get_mid_column(image.shape[0] - 1, image.shape[1] // 2)
             cv2.putText(lanes_orig_frame, "distance to center: " + str(round(dist_to_center,3)) + " [m] width: " + str(round(width,3)) + " [m]" , dist_to_center_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
 
+        if left_curv_exists and right_curv_exists:
+            cv2.putText(lanes_orig_frame, "average curv radius: " + str(round((left_curv + right_curv) / 2.0, 2)) + " [m]", avg_curv_loc, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2, cv2.LINE_AA)
+
+        cv2.imshow("image (original)", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         cv2.imshow("image", image_undist_bgr)
         cv2.imshow("image_white_and_yellow_bin", image_white_and_yellow_bin*255.0)
         cv2.imshow("perspective transform", ptrans_image*255.0)
@@ -138,4 +143,4 @@ for image in gen:
         # cv2.imshow("drawn_lines_img_unperspective", drawn_lane_lines_unperspective)
         # cv2.imshow("lanes image", lane_image)
         
-        cv2.waitKey(10)
+        cv2.waitKey(0)

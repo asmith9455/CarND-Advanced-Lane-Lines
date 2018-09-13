@@ -81,7 +81,7 @@ def calibrate_camera(directory, nx, ny, show_images=False):
             cv2.drawChessboardCorners(image, (nx,ny), corners, ret)
             cv2.imshow("Chessboard Corners", image)
         
-            cv2.waitKey(3000)
+            cv2.waitKey(0)
             cv2.destroyAllWindows()
 
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray_shape[::-1], None, None)
@@ -104,7 +104,7 @@ def calibrate_camera(directory, nx, ny, show_images=False):
             undist = cv2.undistort(image, mtx, dist, None, mtx)
             cv2.imshow("Undistorted", undist)
 
-            cv2.waitKey(3000)
+            cv2.waitKey(0)
             cv2.destroyAllWindows()
 
     return mtx, dist
