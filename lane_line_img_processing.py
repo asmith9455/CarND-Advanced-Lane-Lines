@@ -8,11 +8,15 @@ from collections import deque
 
 import pprint
 
+import math
+
 pp = pprint.PrettyPrinter(indent=4)
 
 def get_yellow_and_white(image):
 
     hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
+
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
     h = hls[:,:,0]
 
@@ -35,9 +39,39 @@ def get_yellow_and_white(image):
 
     image_white_and_yellow_bin = cv2.bitwise_or(yellow_h, white_l)
 
-    x_edges = cv2.Sobel(h, cv2.CV_8U, 1, 0, ksize=5)
+    gray_f64 = gray.astype(np.float64)
 
-    image_pp = cv2.bitwise_and(image_white_and_yellow_bin, x_edges)
+    cv2.imshow("gray", gray)
+
+    x_edges = cv2.Sobel(gray_f64, cv2.CV_64F, 1, 0, ksize=5)
+    y_edges = cv2.Sobel(gray_f64, cv2.CV_64F, 0, 1, ksize=5)
+
+    edges_mag = np.sqrt(np.square(x_edges) + np.square(y_edges))
+
+    edges_dir = np.arctan2(np.absolute(y_edges), np.absolute(x_edges)) # (range 0 to pi / 2)
+
+    # edges_mag
+
+    edges_mag = 255.0 * (edges_mag / np.max(edges_mag))
+    edges_mag = edges_mag.astype(np.uint8)
+
+    edges_dir_ang = edges_dir.copy()
+    edges_dir = edges_dir / np.max(edges_dir) * 255.0
+    edges_dir = edges_dir.astype(np.uint8)
+
+    edges_mag_bin = np.zeros_like(edges_mag)
+    edges_mag_bin[edges_mag > 20] = 255
+
+    edges_dir_bin = np.zeros_like(edges_dir)
+    edges_dir_bin[(edges_dir >= 100) & (edges_dir <= 140 )] = 255
+
+    cv2.imshow("edges_mag", edges_mag)
+    cv2.imshow("edges_mag_bin", edges_mag_bin)
+
+    cv2.imshow("edges_dir", edges_dir)
+    cv2.imshow("edges_dir_bin", edges_dir_bin)
+
+    # image_pp = cv2.bitwise_and(image_white_and_yellow_bin, x_edges)
 
     image_pp = image_white_and_yellow_bin
 
@@ -144,9 +178,6 @@ def perspective_tf_lane_lines(image):
         [last_col, last_row]                        # lower right
     ]
 
-    print("source: ", src)
-    print("destination: ", dst)
-
     src = np.array(src, dtype=np.float32)
     dst = np.array(dst, dtype=np.float32)
 
@@ -154,9 +185,17 @@ def perspective_tf_lane_lines(image):
 
     Minv = cv2.getPerspectiveTransform(dst, src)
 
-    warped = cv2.warpPerspective(image, M, image.shape[::-1], flags=cv2.INTER_LINEAR)
+    if len(image.shape) == 3:
+        warped_all = np.zeros_like(image)
+        warped_all[:,:,0] = cv2.warpPerspective(image[:,:,0], M, image.shape[::-1][1:3], flags=cv2.INTER_LINEAR)
+        warped_all[:,:,1] = cv2.warpPerspective(image[:,:,1], M, image.shape[::-1][1:3], flags=cv2.INTER_LINEAR)
+        warped_all[:,:,2] = cv2.warpPerspective(image[:,:,2], M, image.shape[::-1][1:3], flags=cv2.INTER_LINEAR)
+        return warped_all, M, Minv
+    else:
+        warped = cv2.warpPerspective(image, M, image.shape[::-1], flags=cv2.INTER_LINEAR)
+        return warped, M, Minv 
 
-    return warped, M, Minv
+    
 
 def draw_poly(image, poly_row_to_col, width=1):
 
@@ -187,11 +226,11 @@ def average_lane_buffer_order_2(buffer):
 class LaneExtractor(object):
 
     def __init__(self):
-        self.n_histo = 12 #number of histograms
+        self.n_histo = 40 #number of histograms
         self.win_width = 80  #width of the sliding window
         self.req_frac = 0.5  #required fraction of the vertical slice that must be filled to be a max
 
-        self.average_len = 10
+        self.average_len = 1
 
         self.left_lane_buffer = deque(maxlen=self.average_len)
         self.right_lane_buffer = deque(maxlen=self.average_len)
@@ -249,11 +288,39 @@ class LaneExtractor(object):
                 histo_mps_left.append([(start_row + end_row) // 2, max_col_left]) #row, column
 
                 
-            if right_found:
+            # if right_found:
 
-                max_col_right = min(img_cols - 1 - self.win_width // 2, max_col_right)
-                cv2.rectangle(image_with_lines, (max_col_right - self.win_width // 2, start_row), (max_col_right +  self.win_width // 2, end_row), (0,0,255))
-                histo_mps_right.append([(start_row + end_row) // 2, max_col_right]) #row, column
+            #     max_col_right = min(img_cols - 1 - self.win_width // 2, max_col_right)
+            #     cv2.rectangle(image_with_lines, (max_col_right - self.win_width // 2, start_row), (max_col_right +  self.win_width // 2, end_row), (0,0,255))
+            #     
+
+            req_cont_frac = 0.9
+            req_cont_height = req_cont_frac * histo_height
+            req_num_reps = 10
+
+            ctr = 0
+            reps_ctr = 0
+            found = False
+            match_col = 0
+
+            for col in histo[histo_mp:]:
+                if col > req_cont_height:
+                    reps_ctr = reps_ctr + 1
+                else:
+                    reps_ctr = 0
+                
+                if reps_ctr == req_num_reps:
+                    found = True
+                    match_col = ctr - req_num_reps // 2
+                    break
+                
+                ctr = ctr + 1
+
+            if found:
+                right_match_row = (start_row + end_row) // 2
+                right_match_col = match_col + histo_mp
+                histo_mps_right.append([right_match_row, right_match_col]) #row, column 
+                cv2.rectangle(image_with_lines, (right_match_col - self.win_width // 2, start_row), (right_match_col +  self.win_width // 2, end_row), (0,0,255))
 
                 
         if len(histo_mps_left) > 2:

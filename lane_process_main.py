@@ -35,13 +35,13 @@ for image in gen:
 
     image_undist = cv2.undistort(image, mtx, dist, None, mtx)
 
-    image_white_and_yellow_bin = get_yellow_and_white(image_undist)
-
     # edges = get_lane_edges(image_undist)
 
     # image_pp = cv2.bitwise_and(image_white_and_yellow_bin, edges)
 
-    ptrans_image, M, Minv = perspective_tf_lane_lines(image_white_and_yellow_bin)
+    ptrans_image_undist, M, Minv = perspective_tf_lane_lines(image_undist)
+
+    ptrans_image_white_and_yellow_bin = get_yellow_and_white(ptrans_image_undist)
 
     # lane_image = extract_lanes(ptrans_image)
 
@@ -90,7 +90,7 @@ for image in gen:
     elif video_mode:
         image_undist_bgr = cv2.cvtColor(image_undist, cv2.COLOR_RGB2BGR)
 
-        debug_image = lane_extractor.process_image(ptrans_image)
+        debug_image = lane_extractor.process_image(ptrans_image_white_and_yellow_bin)
 
         left_lane_exists, left_lane = lane_extractor.left_lane()
 
@@ -136,11 +136,10 @@ for image in gen:
 
         cv2.imshow("image (original)", cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
         cv2.imshow("image", image_undist_bgr)
-        cv2.imshow("image_white_and_yellow_bin", image_white_and_yellow_bin*255.0)
-        cv2.imshow("perspective transform", ptrans_image*255.0)
         cv2.imshow("debug_image", debug_image*255.0)
+        cv2.imshow("ptrans_image_undist", cv2.cvtColor(ptrans_image_undist, cv2.COLOR_RGB2BGR))
         cv2.imshow("lanes_orig_frame", lanes_orig_frame)
         # cv2.imshow("drawn_lines_img_unperspective", drawn_lane_lines_unperspective)
         # cv2.imshow("lanes image", lane_image)
         
-        cv2.waitKey(0)
+        cv2.waitKey(10)
