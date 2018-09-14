@@ -221,15 +221,20 @@ def perspective_tf_lane_lines(image):
         warped = cv2.warpPerspective(image, M, image.shape[::-1], flags=cv2.INTER_LINEAR)
         return warped, M, Minv 
 
-    
+def fill_between_polys(image, poly_1, poly_2):
+    for row in range(image.shape[0]-1):
+        col1 = int(np.polyval(poly_1, row))
+        col2 = int(np.polyval(poly_2, row))
 
-def draw_poly(image, poly_row_to_col, width=1):
+        cv2.line(image, (col1, row), (col2, row), (0, 255, 0), thickness=1)
+
+def draw_poly(image, poly_row_to_col, width=1, colour=(0,255,0)):
 
     for row in range(image.shape[0]-1):
         col = int(np.polyval(poly_row_to_col, row))
         col2 = int(np.polyval(poly_row_to_col, row + 1))
 
-        cv2.line(image, (col, row), (col2, row + 1), (0, 255, 0), thickness=width)
+        cv2.line(image, (col, row), (col2, row + 1), colour, thickness=width)
 
 def average_lane_buffer_order_2(buffer):
 
@@ -256,7 +261,7 @@ class LaneExtractor(object):
         self.win_width = 80  #width of the sliding window
         self.req_frac = 0.9  #required fraction of the vertical slice that must be filled to be a max
 
-        self.average_len = 2
+        self.average_len = 10
 
         self.left_lane_buffer = deque(maxlen=self.average_len)
         self.right_lane_buffer = deque(maxlen=self.average_len)
@@ -277,7 +282,7 @@ class LaneExtractor(object):
         histo_mps_left = []
         histo_mps_right = []
 
-        image_with_lines = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        image_with_lines = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR) * 255
 
         for start_row in range(img_rows - 1, -1, -histo_height):
             print ("computing histo")
@@ -360,7 +365,7 @@ class LaneExtractor(object):
 
             if right_found:
                 histo_mps_right.append([right_match_row, right_match_col]) #row, column 
-                cv2.rectangle(image_with_lines, (right_match_col - self.win_width // 2, start_row), (right_match_col +  self.win_width // 2, end_row), (0,0,255))
+                cv2.rectangle(image_with_lines, (right_match_col - self.win_width // 2, start_row), (right_match_col +  self.win_width // 2, end_row), (255,0,0))
 
             # -------------------------------------------------------------
             # -------------------------------------------------------------
