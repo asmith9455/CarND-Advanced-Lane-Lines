@@ -12,6 +12,19 @@ import math
 
 pp = pprint.PrettyPrinter(indent=4)
 
+def getEdges(single_channel_image):
+
+    gray_f64 = single_channel_image.astype(np.float64)
+
+    x_edges = cv2.Sobel(gray_f64, cv2.CV_64F, 1, 0, ksize=5)
+    y_edges = cv2.Sobel(gray_f64, cv2.CV_64F, 0, 1, ksize=5)
+
+    edges_mag = np.sqrt(np.square(x_edges) + np.square(y_edges))
+
+    edges_dir = np.arctan2(np.absolute(y_edges), np.absolute(x_edges)) # (range 0 to pi / 2)
+
+    return edges_mag, edges_dir
+
 def get_yellow_and_white(image):
 
     hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
@@ -43,12 +56,7 @@ def get_yellow_and_white(image):
 
     cv2.imshow("gray", gray)
 
-    x_edges = cv2.Sobel(gray_f64, cv2.CV_64F, 1, 0, ksize=5)
-    y_edges = cv2.Sobel(gray_f64, cv2.CV_64F, 0, 1, ksize=5)
-
-    edges_mag = np.sqrt(np.square(x_edges) + np.square(y_edges))
-
-    edges_dir = np.arctan2(np.absolute(y_edges), np.absolute(x_edges)) # (range 0 to pi / 2)
+    edges_mag, edges_dir = getEdges(gray)
 
     # edges_mag
 
@@ -60,20 +68,38 @@ def get_yellow_and_white(image):
     edges_dir = edges_dir.astype(np.uint8)
 
     edges_mag_bin = np.zeros_like(edges_mag)
-    edges_mag_bin[edges_mag > 20] = 255
+    edges_mag_bin[edges_mag > 10] = 255
 
     edges_dir_bin = np.zeros_like(edges_dir)
-    edges_dir_bin[(edges_dir >= 100) & (edges_dir <= 140 )] = 255
+    edges_dir_bin[(edges_dir >= 1) & (edges_dir <= 120 )] = 255
 
-    cv2.imshow("edges_mag", edges_mag)
+    edges_overall_a = cv2.bitwise_and(edges_dir_bin, edges_mag_bin)
+
+    edges_overall_b = cv2.bitwise_or(edges_overall_a, image_white_and_yellow_bin * 255)
+
+    edges_overall_1 = cv2.erode(edges_overall_b, np.ones((3,3)),iterations=1)
+    edges_overall_2 = cv2.dilate(edges_overall_1, np.ones((5,5)),iterations=5)
+    edges_overall_3 = cv2.erode(edges_overall_2, np.ones((5,5)),iterations=4)
+
+    cv2.imshow("white_and_yellow", image_white_and_yellow_bin * 255)
+
+    # cv2.imshow("edges_mag", edges_mag)
     cv2.imshow("edges_mag_bin", edges_mag_bin)
 
-    cv2.imshow("edges_dir", edges_dir)
+    # cv2.imshow("edges_dir", edges_dir)
     cv2.imshow("edges_dir_bin", edges_dir_bin)
+
+    cv2.imshow("edges_overall_a", edges_overall_a)
+    cv2.imshow("edges_overall_b", edges_overall_b)
+    cv2.imshow("edges_overall_1", edges_overall_1)
+    cv2.imshow("edges_overall_2", edges_overall_2)
+    cv2.imshow("edges_overall_3", edges_overall_3)
 
     # image_pp = cv2.bitwise_and(image_white_and_yellow_bin, x_edges)
 
     image_pp = image_white_and_yellow_bin
+    image_pp = (edges_overall_3 / 255).astype(np.uint8)
+
 
     return image_pp
 
@@ -226,11 +252,11 @@ def average_lane_buffer_order_2(buffer):
 class LaneExtractor(object):
 
     def __init__(self):
-        self.n_histo = 40 #number of histograms
+        self.n_histo = 30 #number of histograms
         self.win_width = 80  #width of the sliding window
-        self.req_frac = 0.5  #required fraction of the vertical slice that must be filled to be a max
+        self.req_frac = 0.9  #required fraction of the vertical slice that must be filled to be a max
 
-        self.average_len = 1
+        self.average_len = 2
 
         self.left_lane_buffer = deque(maxlen=self.average_len)
         self.right_lane_buffer = deque(maxlen=self.average_len)
@@ -264,28 +290,28 @@ class LaneExtractor(object):
 
             histo_mp = histo.shape[0] // 2
 
-            max_col_left = np.argmax(histo[:histo_mp])
-            max_col_right = np.argmax(histo[histo_mp:]) + histo_mp
+            # max_col_left = np.argmax(histo[:histo_mp])
+            # max_col_right = np.argmax(histo[histo_mp:]) + histo_mp
 
-            cnt_max_left = histo[max_col_left]
-            cnt_max_right = histo[max_col_right]
+            # cnt_max_left = histo[max_col_left]
+            # cnt_max_right = histo[max_col_right]
 
-            left_found = None
+            # left_found = None
 
-            if len(histo_mps_left) == 0:
-                left_found = max_col_left != 0 and cnt_max_left >= int(self.req_frac * histo_height)
-            else:
-                left_found = max_col_left != 0 and cnt_max_left >= int(self.req_frac * histo_height) and abs(max_col_left - histo_mps_left[-1][1]) < self.win_width // 2
+            # if len(histo_mps_left) == 0:
+            #     left_found = max_col_left != 0 and cnt_max_left >= int(self.req_frac * histo_height)
+            # else:
+            #     left_found = max_col_left != 0 and cnt_max_left >= int(self.req_frac * histo_height) and abs(max_col_left - histo_mps_left[-1][1]) < self.win_width // 2
 
-            right_found = max_col_right != histo_mp and cnt_max_right >= int(self.req_frac * histo_height)
+            # right_found = max_col_right != histo_mp and cnt_max_right >= int(self.req_frac * histo_height)
 
-            print("left found? : ", left_found)
+            # print("left found? : ", left_found)
 
-            if left_found:
+            # if left_found:
                 
-                max_col_left = max(self.win_width // 2, max_col_left)
-                cv2.rectangle(image_with_lines, (max_col_left - self.win_width // 2, start_row), (max_col_left +  self.win_width // 2, end_row), (255,0,0))
-                histo_mps_left.append([(start_row + end_row) // 2, max_col_left]) #row, column
+            #     max_col_left = max(self.win_width // 2, max_col_left)
+            #     cv2.rectangle(image_with_lines, (max_col_left - self.win_width // 2, start_row), (max_col_left +  self.win_width // 2, end_row), (255,0,0))
+            #     histo_mps_left.append([(start_row + end_row) // 2, max_col_left]) #row, column
 
                 
             # if right_found:
@@ -294,33 +320,92 @@ class LaneExtractor(object):
             #     cv2.rectangle(image_with_lines, (max_col_right - self.win_width // 2, start_row), (max_col_right +  self.win_width // 2, end_row), (0,0,255))
             #     
 
+            
+
             req_cont_frac = 0.9
             req_cont_height = req_cont_frac * histo_height
-            req_num_reps = 10
+            req_num_reps = 25
+            max_jump_between_frames = 50
 
-            ctr = 0
-            reps_ctr = 0
-            found = False
-            match_col = 0
+            # -------------------------------------------------------------
+            # match on the right side--------------------------------------
+            # -------------------------------------------------------------
+
+            right_ctr = 0
+            right_reps_ctr = 0
+            right_found = False
+            right_match_col = 0
 
             for col in histo[histo_mp:]:
                 if col > req_cont_height:
-                    reps_ctr = reps_ctr + 1
+                    right_reps_ctr = right_reps_ctr + 1
                 else:
-                    reps_ctr = 0
+                    right_reps_ctr = 0
+                    if right_found:
+                        break
                 
-                if reps_ctr == req_num_reps:
-                    found = True
-                    match_col = ctr - req_num_reps // 2
-                    break
+                if right_reps_ctr >= req_num_reps:
+                    right_found = True
+                    right_match_col = right_ctr - right_reps_ctr // 2
                 
-                ctr = ctr + 1
+                right_ctr = right_ctr + 1
 
-            if found:
-                right_match_row = (start_row + end_row) // 2
-                right_match_col = match_col + histo_mp
+            right_match_row = (start_row + end_row) // 2
+            right_match_col = right_match_col + histo_mp
+
+            ret, right_lane = self.right_lane()
+
+            if ret and right_found:
+                right_found = right_found and max_jump_between_frames >= abs( int(np.polyval(right_lane, right_match_row)) - right_match_col )
+
+            if right_found:
                 histo_mps_right.append([right_match_row, right_match_col]) #row, column 
                 cv2.rectangle(image_with_lines, (right_match_col - self.win_width // 2, start_row), (right_match_col +  self.win_width // 2, end_row), (0,0,255))
+
+            # -------------------------------------------------------------
+            # -------------------------------------------------------------
+            # -------------------------------------------------------------
+
+            # -------------------------------------------------------------
+            # match on the left side--------------------------------------
+            # -------------------------------------------------------------
+
+            left_ctr = 0
+            left_reps_ctr = 0
+            left_found = False
+            left_match_col = 0
+
+            for col in histo[:histo_mp][::-1]:
+                if col > req_cont_height:
+                    left_reps_ctr = left_reps_ctr + 1
+                else:
+                    left_reps_ctr = 0
+                    if left_found:
+                        break
+                
+                if left_reps_ctr >= req_num_reps:
+                    left_found = True
+                    left_match_col = histo_mp - (left_ctr - left_reps_ctr // 2)
+                
+                left_ctr = left_ctr + 1
+
+            # must be within the max_jump_between_frames of the previous polynomial in order to be 'found'
+
+            left_match_row = (start_row + end_row) // 2
+
+            ret, left_lane = self.left_lane()
+
+            if ret and left_found:
+                left_found = left_found and max_jump_between_frames >= abs( int(np.polyval(left_lane, left_match_row)) - left_match_col )
+
+            if left_found:
+                left_match_col = left_match_col
+                histo_mps_left.append([left_match_row, left_match_col]) #row, column 
+                cv2.rectangle(image_with_lines, (left_match_col - self.win_width // 2, start_row), (left_match_col +  self.win_width // 2, end_row), (0,0,255))
+
+            # -------------------------------------------------------------
+            # -------------------------------------------------------------
+            # -------------------------------------------------------------
 
                 
         if len(histo_mps_left) > 2:
