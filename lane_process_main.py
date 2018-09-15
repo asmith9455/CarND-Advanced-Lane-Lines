@@ -14,8 +14,8 @@ from image_generators import *
 import numpy as np
 
 
-display_video_mode = False
-write_video_mode = True
+display_video_mode = True
+write_video_mode = False
 photo_mode = False
 
 gen = None
@@ -34,7 +34,7 @@ lane_extractor = LaneExtractor()
 
 # skip = 50
 # ctr_skip = 0
-start = 950
+start = 400
 # 950 for second bright patch
 # 500 for first bright patch
 ctr_start = 0

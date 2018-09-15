@@ -51,10 +51,10 @@ The 2D and 3D points from each image are all appending to object point and image
 
 I applied the resultant distortion correction matrix to the calibratoin images using `cv2.undistort` function and obtained the following chart as examples. I chose these examples because the pattern clearly becomes straight after being curved.
 
-original             |  Chessboard Corners | Undistorted
-:-------------------------:|:-------------------------:|:------:|
-![Image 2 Original](report_imgs/calibration_2_original.png)  |  ![Image 2 Chessboard](report_imgs/calibration_2_chessboard_corners.png) | ![Image 2 Chessboard](report_imgs/calibration_2_undistorted.png)
-![Image 3 Original](report_imgs/calibration_3_original.png)  |  ![Image 3 Chessboard](report_imgs/calibration_3_chessboard.png) | ![Image 3 Chessboard](report_imgs/calibration_3_undistorted.png)
+Original             |  Chessboard Corners | Undistorted |
+|:-------------------------:|:-------------------------:|:------:|
+|![Image 2 Original](report_imgs/calibration_2_original.png)  |  ![Image 2 Chessboard](report_imgs/calibration_2_chessboard_corners.png) | ![Image 2 Chessboard](report_imgs/calibration_2_undistorted.png)|
+|![Image 3 Original](report_imgs/calibration_3_original.png)  |  ![Image 3 Chessboard](report_imgs/calibration_3_chessboard.png) | ![Image 3 Chessboard](report_imgs/calibration_3_undistorted.png)|
 
 ### Pipeline (single images)
 
@@ -62,43 +62,97 @@ original             |  Chessboard Corners | Undistorted
 
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
 
-![alt text][image2]
+![Original Image](report_imgs/pipe_imgs/image_original.png)
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`). Note that I performed the image processing after performing the perspective transform on the captured image.
 
-![alt text][image3]
+First, I calculated the gradient direction and magnitude, and thresholded each to produce two binary images where I expect the lane lines to be. These are shown in the table below.
+
+| Gradient Magnitude Thresholded | Gradient Direction Thresholded |
+|:---:|:---:|
+|![Gradient Magnitude Thresholded](report_imgs/pipe_imgs/edges_mag_bin.png)|![Gradient Direction Thresholded](report_imgs/pipe_imgs/edges_dir_bin.png)|
+
+Then, I calculated the bitwise_and of these two images to produce an edge based estimate of the lane line positions. I also applies colour filters to identify the white and yellow portions of the image. See the result of each of these thresholds in the table below.
+
+
+| Lane Lines from Edge Information | Lane Lines from Colour Information |
+|:---:|:---:|
+|![Lane Lines from Edge Information](report_imgs/pipe_imgs/edges_overall_a.png) | ![Lane Lines from Colour Information](report_imgs/pipe_imgs/white_and_yellow.png)|
+
+Then, I bitwise_or'd the two of these to produce an overall estimate of the lane lines position.
+
+![Lane Lines Binary Image](report_imgs/pipe_imgs/edges_overall_b.png)
+
+Finally, I performed
+- an erosion to remove noise
+- a dilation to make the lane lines whole
+- another erosion to return the lane lines to close to their original size
+
+![Lane Lines from Edge Information](report_imgs/pipe_imgs/edges_overall_1.png)
+![Lane Lines from Edge Information](report_imgs/pipe_imgs/edges_overall_2.png)
+![Lane Lines from Edge Information](report_imgs/pipe_imgs/edges_overall_3.png)
+
+This last image is the output of the image processing part of my pipeline.
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
+The code for my perspective transform is contained in the function perspective_tf_lane_lines in lane_line_img_processing.py. Lines X to Y of this file define the source and destination points. This code is also shown below. Then, I used the function `cv2.getPerspectiveTransform` to generate the perspective transformation matrix. Finally, I used the `cv2.warpPerspective` function to warp the image (named `image`) that was passed into the function.
 
 ```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
-dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
+
+img_cols = image.shape[1]
+img_rows = image.shape[0]
+
+last_row = img_rows - 1
+last_col = img_cols - 1
+
+mid_col = int(img_cols * 0.5)
+mid_row = int(img_rows * 0.5)
+
+src = \
+[
+    [mid_col - 100, int(img_rows*0.63)],        # upper left
+    [mid_col + 100, int(img_rows*0.63)],        # upper right
+    [mid_col - 850, last_row],                  # lower left
+    [mid_col + 850, last_row]                   # lower right
+]
+
+dst = \
+[
+    [0, 0],                                     # upper left
+    [last_col, 0],                              # upper right
+    [0, last_row],                              # lower left
+    [last_col, last_row]                        # lower right
+]
+
 ```
 
 This resulted in the following source and destination points:
 
+
+[[0, 0], [1279, 0], [0, 719], [1279, 719]]
 | Source        | Destination   | 
 |:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+| 540, 453      | 0, 0        | 
+| 740, 453      | 1279, 0      |
+| -210, 719     | 0, 719      |
+| 1490, 719      | 1279, 719        |
 
-I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+Note that the source points on the bottom row actually extend outside the bottom of the image.
 
-![alt text][image4]
+I verified that my perspective transform was working as expected by checking whether or not the lane lines are vertical on a straight section of road.
+
+| Source        | Destination (Perspective Transform)   | 
+|:-------------:|:-------------:| 
+| ![Source Image](report_imgs/pipe_imgs/image_straight.png) | ![Destination Image](report_imgs/pipe_imgs/ptrans_straight.png) | 
+
+Here is another example of the perspective transform, this time on a curved road.
+
+| Source        | Destination (Perspective Transform)   | 
+|:-------------:|:-------------:| 
+| ![Source Image](report_imgs/pipe_imgs/image_undistorted.png) | ![Destination Image](report_imgs/pipe_imgs/ptrans_image_undist.png) | 
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
