@@ -20,6 +20,7 @@ photo_mode = False
 
 gen = None
 
+#define generators depending on the selected mode
 if display_video_mode:
     gen = video_generator("project_video.mp4")
 
@@ -27,32 +28,31 @@ elif photo_mode:
     gen = photo_generator("my_test_images")
 
 # perform camera calibration
-
 mtx, dist = calibrate_camera("camera_cal", 9, 6, False)
 
 lane_extractor = LaneExtractor()
 
-# skip = 50
-# ctr_skip = 0
+#enable starting at different points in the image sequence (set start to the first frame count to be processed)
+
 start = 400
-# 950 for second bright patch
-# 500 for first bright patch
 ctr_start = 0
 
+# this function defines the image processing pipeline
 def get_images(image, show_cv_windows=True):
 
+    #undistort the input image based on the calibration information
     image_undist = cv2.undistort(image, mtx, dist, None, mtx)
 
-    # edges = get_lane_edges(image_undist)
-
-    # image_pp = cv2.bitwise_and(image_white_and_yellow_bin, edges)
-
+    #perform perspective transformation
     ptrans_image_undist, M, Minv = perspective_tf_lane_lines(image_undist)
 
+    #image segmentation
     ptrans_image_white_and_yellow_bin = get_yellow_and_white(ptrans_image_undist)
 
+    #convert to BGR
     image_undist_bgr = cv2.cvtColor(image_undist, cv2.COLOR_RGB2BGR)
 
+    #
     debug_image = lane_extractor.process_image(ptrans_image_white_and_yellow_bin)
 
     left_lane_exists, left_lane = lane_extractor.left_lane()
@@ -116,17 +116,9 @@ if display_video_mode or photo_mode:
 
     for image in gen:
 
-        # ctr_skip = ctr_skip + 1
-        # if ctr_skip == skip:
-        #     ctr_skip = 0
-        # else:
-        #     continue
-
         ctr_start = ctr_start + 1
         if ctr_start < start:
             continue
-
-        
 
         # lane_image = extract_lanes(ptrans_image)
 

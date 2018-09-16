@@ -1,10 +1,10 @@
-## Writeup Template
+## Advanced Lane Lines Project Writeup
 
 ---
 
-**Advanced Lane Finding Project**
+**Goals**
 
-The goals / steps of this project are the following:
+The goals of this project are the following:
 
 * Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
 * Apply a distortion correction to raw images.
@@ -14,16 +14,6 @@ The goals / steps of this project are the following:
 * Determine the curvature of the lane and vehicle position with respect to center.
 * Warp the detected lane boundaries back onto the original image.
 * Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
-
-[//]: # (Image References)
-
-[image1]: ./examples/undistort_output.png "Undistorted"
-[image2]: ./test_images/test1.jpg "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 
@@ -81,7 +71,7 @@ Then, I calculated the bitwise_and of these two images to produce an edge based 
 |:---:|:---:|
 |![Lane Lines from Edge Information](report_imgs/pipe_imgs/edges_overall_a.png) | ![Lane Lines from Colour Information](report_imgs/pipe_imgs/white_and_yellow.png)|
 
-Then, I bitwise_or'd the two of these to produce an overall estimate of the lane lines position.
+Then, I bitwise_or'd the two of these to produce an overall estimate of the lane lines position. I used the OR operation in this step because I hoped that in challenging conditions, the information from each approach could be combined to produce an estimate of the lane line position. I manually verified that each method independently had a low rate of false positives.
 
 ![Lane Lines Binary Image](report_imgs/pipe_imgs/edges_overall_b.png)
 
@@ -94,7 +84,7 @@ Finally, I performed
 ![Lane Lines from Edge Information](report_imgs/pipe_imgs/edges_overall_2.png)
 ![Lane Lines from Edge Information](report_imgs/pipe_imgs/edges_overall_3.png)
 
-This last image is the output of the image processing part of my pipeline.
+This last image is the binary image output that I used to pull lane line information from.
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
@@ -142,7 +132,7 @@ This resulted in the following source and destination points:
 
 Note that the source points on the bottom row actually extend outside the bottom of the image.
 
-I verified that my perspective transform was working as expected by checking whether or not the lane lines are vertical on a straight section of road.
+I verified that my perspective transform was working as expected by checking whether or not the lane lines are vertical on a straight section of road (for example, see the table below).
 
 | Source        | Destination (Perspective Transform)   | 
 |:-------------:|:-------------:| 
@@ -156,9 +146,13 @@ Here is another example of the perspective transform, this time on a curved road
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
+To produce an estimate of the lane line positions within the resultant binary image, I used a technique similar to the one presented in the lane finding lessons. This involves scanning through horizontal sections of the image (accessed using numpy code like `binary_image[start_row:end_row, :]`). I then computed a histogram of filled pixels by column for each of the horizontal sections. I then search for a particular quality of the resultant signal that seemed to robustly identify the position of the lane line in that particular section. Note that I always started scanning from the center column (histo_mp in the code) towards the outside of the image.
+
+
+
 Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
 
-![alt text][image5]
+![Lane Line Identification](report_imgs/pipe_imgs/debug_image.png)
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 

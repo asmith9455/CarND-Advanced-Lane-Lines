@@ -13,7 +13,9 @@ import math
 pp = pprint.PrettyPrinter(indent=4)
 
 def getEdges(single_channel_image):
-
+    """
+    Get the edges magnitude and direction for the input image.
+    """
     gray_f64 = single_channel_image.astype(np.float64)
 
     x_edges = cv2.Sobel(gray_f64, cv2.CV_64F, 1, 0, ksize=5)
@@ -26,7 +28,9 @@ def getEdges(single_channel_image):
     return edges_mag, edges_dir
 
 def get_yellow_and_white(image):
-
+    """
+    Return a binary image that bitwise_ors the results of yellow and white colour segmentation and edge detection.
+    """
     hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
 
     gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -104,37 +108,47 @@ def get_yellow_and_white(image):
     return image_pp
 
 def get_lane_edges(image):
-
+    """
+    Return the x component of the image gradient.
+    """
     x_edges = cv2.Sobel(image, cv2.CV_8U, 1, 0, ksize=5)
 
     return x_edges
 
 def calibrate_camera(directory, nx, ny, show_images=False):
-    # directory is the path to a directory containing the calibration (checkerboard) images
+    """
+    Calibrate the camera using checkerboard images.
+    directory is the path to a directory containing the calibration (checkerboard) images
+    """
 
     objpoints = []
     imgpoints = []
     gray_shape = None
 
+    # produce the object points - these are the same of all images of the same checkerboard
     objp = np.zeros((9*6,3), dtype=np.float32)
     objp[:,:2] = np.mgrid[0:9,0:6].T.reshape(-1,2)
 
+    #construct a photo generator for the directory and calibrate using all the images it outputs
     for image in photo_generator(directory):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray_shape = gray.shape
         
-
+        # find the chessboard corners from the grayscale image
         ret, corners = cv2.findChessboardCorners(gray, (nx, ny), None)
 
+        # provide information to the user indicating whether or not chessboard corners could be found (and therefore whether or not calibration is possible)
         if not(ret):
             print("Couldn't find chessboard corners for a calibration image.")
             continue
         else:
             print("Found chessboard corners for a calibration image.")
         
+        # add the object and image points to the overall list
         objpoints.append(objp)
         imgpoints.append(corners)
 
+        #visualization (currently permanently disabled)
         if show_images and False:
             cv2.imshow("Original", image)
 
@@ -144,10 +158,12 @@ def calibrate_camera(directory, nx, ny, show_images=False):
             cv2.waitKey(0)
             cv2.destroyAllWindows()
 
+    # use opencv to get the distortion matrix given the information collected from the camera images
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray_shape[::-1], None, None)
 
     print("camera calibration success?: ", ret)
 
+    # visualization
     if show_images:
         for image in photo_generator(directory):
             
@@ -170,6 +186,9 @@ def calibrate_camera(directory, nx, ny, show_images=False):
     return mtx, dist
 
 def perspective_tf_lane_lines(image):
+    """
+    Perform a perspective transform on the supplied image such that straight lane lines become vertical.
+    """
 
     img_cols = image.shape[1]
     img_rows = image.shape[0]
@@ -188,6 +207,7 @@ def perspective_tf_lane_lines(image):
     #     [mid_col + 200, last_row]       # lower right
     # ]
 
+    #define the source and destination points that will be used to calculate the transformation matrix
     src = \
     [
         [mid_col - 100, int(img_rows*0.63)],        # upper left
@@ -211,6 +231,7 @@ def perspective_tf_lane_lines(image):
 
     Minv = cv2.getPerspectiveTransform(dst, src)
 
+    # this conditional makes the function work for both binary (len(shape) == 2) and 3 channel images
     if len(image.shape) == 3:
         warped_all = np.zeros_like(image)
         warped_all[:,:,0] = cv2.warpPerspective(image[:,:,0], M, image.shape[::-1][1:3], flags=cv2.INTER_LINEAR)
@@ -222,6 +243,9 @@ def perspective_tf_lane_lines(image):
         return warped, M, Minv 
 
 def fill_between_polys(image, poly_1, poly_2):
+    """
+    Fill the region between two polynomials with green
+    """
     for row in range(image.shape[0]-1):
         col1 = int(np.polyval(poly_1, row))
         col2 = int(np.polyval(poly_2, row))
@@ -229,6 +253,9 @@ def fill_between_polys(image, poly_1, poly_2):
         cv2.line(image, (col1, row), (col2, row), (0, 255, 0), thickness=1)
 
 def draw_poly(image, poly_row_to_col, width=1, colour=(0,255,0)):
+    """
+    Draw a polynomial (that maps row to column) on an image.
+    """
 
     for row in range(image.shape[0]-1):
         col = int(np.polyval(poly_row_to_col, row))
@@ -237,7 +264,9 @@ def draw_poly(image, poly_row_to_col, width=1, colour=(0,255,0)):
         cv2.line(image, (col, row), (col2, row + 1), colour, thickness=width)
 
 def average_lane_buffer_order_2(buffer):
-
+    """
+    Averages a lane buffer of generic length (consists of order 2 polynomials).
+    """
     buff_sum = np.array([0,0,0], dtype=np.float32)
 
     for lane in buffer:
@@ -254,6 +283,7 @@ def average_lane_buffer_order_2(buffer):
 
     return buff_avg
 
+# The class that performs lane tracking and allows the user to get the current state of the lane lines or update the state of the lane lines by providing the next image.
 class LaneExtractor(object):
 
     def __init__(self):
@@ -263,10 +293,14 @@ class LaneExtractor(object):
 
         self.average_len = 10
 
+        #initialize lane buffers for the left and right side
         self.left_lane_buffer = deque(maxlen=self.average_len)
         self.right_lane_buffer = deque(maxlen=self.average_len)
 
     def process_image(self, image):
+        """
+        Updates the lane line state using the supplied image. It is assumed that the frame rate of the camera is sufficiently fast that the change in the lane lines from frame to frame is below a certain threshold.
+        """
         
         image = image.copy()
 
@@ -284,6 +318,8 @@ class LaneExtractor(object):
 
         image_with_lines = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR) * 255
 
+        # this loop finds the left and right lane lines from the binary image produced from colour segmentation and gradient characteristic thresholding.
+
         for start_row in range(img_rows - 1, -1, -histo_height):
             print ("computing histo")
             end_row = start_row - histo_height + 1
@@ -293,39 +329,7 @@ class LaneExtractor(object):
             #print("image: ", image[start_row:end_row, :])
             histo = np.sum(image[end_row:start_row, :], axis=0)
 
-            histo_mp = histo.shape[0] // 2
-
-            # max_col_left = np.argmax(histo[:histo_mp])
-            # max_col_right = np.argmax(histo[histo_mp:]) + histo_mp
-
-            # cnt_max_left = histo[max_col_left]
-            # cnt_max_right = histo[max_col_right]
-
-            # left_found = None
-
-            # if len(histo_mps_left) == 0:
-            #     left_found = max_col_left != 0 and cnt_max_left >= int(self.req_frac * histo_height)
-            # else:
-            #     left_found = max_col_left != 0 and cnt_max_left >= int(self.req_frac * histo_height) and abs(max_col_left - histo_mps_left[-1][1]) < self.win_width // 2
-
-            # right_found = max_col_right != histo_mp and cnt_max_right >= int(self.req_frac * histo_height)
-
-            # print("left found? : ", left_found)
-
-            # if left_found:
-                
-            #     max_col_left = max(self.win_width // 2, max_col_left)
-            #     cv2.rectangle(image_with_lines, (max_col_left - self.win_width // 2, start_row), (max_col_left +  self.win_width // 2, end_row), (255,0,0))
-            #     histo_mps_left.append([(start_row + end_row) // 2, max_col_left]) #row, column
-
-                
-            # if right_found:
-
-            #     max_col_right = min(img_cols - 1 - self.win_width // 2, max_col_right)
-            #     cv2.rectangle(image_with_lines, (max_col_right - self.win_width // 2, start_row), (max_col_right +  self.win_width // 2, end_row), (0,0,255))
-            #     
-
-            
+            histo_mp = histo.shape[0] // 2            
 
             req_cont_frac = 0.9
             req_cont_height = req_cont_frac * histo_height
@@ -412,6 +416,7 @@ class LaneExtractor(object):
             # -------------------------------------------------------------
             # -------------------------------------------------------------
 
+        # we must have detected at least 3 points on either lane line in order to produce an order 2 polynomial estimate of the lane line location.
                 
         if len(histo_mps_left) > 2:
         
@@ -437,18 +442,27 @@ class LaneExtractor(object):
         return image_with_lines
         
     def left_lane(self):
+        """
+        Returns the left lane line, if available.
+        """
         if len(self.left_lane_buffer) == 0:
             return False, None
         else:
             return True, average_lane_buffer_order_2(self.left_lane_buffer)
         
     def right_lane(self):
+        """
+        Returns the right lane line, if available.
+        """
         if len(self.right_lane_buffer) == 0:
             return False, None
         else:
             return True, average_lane_buffer_order_2(self.right_lane_buffer)
 
     def left_curvature(self):
+        """
+        Calculate and return the left lane line curvature estimate.
+        """
         ret, lane = self.left_lane()
 
         px_2_m_col2y = 3.7 / 690.0 # since the lane width is 3.7 m
@@ -468,6 +482,9 @@ class LaneExtractor(object):
         return True, curv
 
     def right_curvature(self):
+        """
+        Calculate and return the right lane line curvature estimate.
+        """
         ret, lane = self.right_lane()
 
         px_2_m_col2y = 3.7 / 690.0 # since the lane width is 3.7 m
@@ -487,7 +504,9 @@ class LaneExtractor(object):
         return True, curv
     
     def get_mid_column(self, row, center_col):
-
+        """
+        Return the column in the image that is halfway between the polynomial estiamtes of the left and right lane lines (in the bottom row of the image).
+        """
         # 690 px is 3.7 m
 
         px_2_m_col2y = 3.7 / 690.0 # since the lane width is 3.7 m
