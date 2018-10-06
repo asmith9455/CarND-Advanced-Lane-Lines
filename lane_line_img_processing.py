@@ -475,7 +475,7 @@ class LaneExtractor(object):
         B = lane[1] * px_2_m_col2y / px_2_m_row2x       
         C = lane[2] * px_2_m_col2y
         
-        row = (self.shape[0] - 1) * px_2_m_col2y
+        row = (self.shape[0] - 1) * px_2_m_row2x
 
         curv = (1.0 + (2.0*A*row + B )**2.0 )**(1.5) / abs(2.0 * A)
 
@@ -497,7 +497,7 @@ class LaneExtractor(object):
         B = lane[1] * px_2_m_col2y / px_2_m_row2x
         C = lane[2] * px_2_m_col2y
         
-        row = (self.shape[0] - 1) * px_2_m_col2y
+        row = (self.shape[0] - 1) * px_2_m_row2x
 
         curv = (1.0 + (2.0*A*row + B )**2.0 )**(1.5) / abs(2.0 * A)
 

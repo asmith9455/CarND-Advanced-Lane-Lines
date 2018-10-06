@@ -34,12 +34,13 @@ lane_extractor = LaneExtractor()
 
 #enable starting at different points in the image sequence (set start to the first frame count to be processed)
 
-start = 400
+start = 0
 ctr_start = 0
 
-# this function defines the image processing pipeline
 def get_images(image, show_cv_windows=True):
-
+    """
+    this function defines the image processing pipeline
+    """
     #undistort the input image based on the calibration information
     image_undist = cv2.undistort(image, mtx, dist, None, mtx)
 
@@ -52,32 +53,38 @@ def get_images(image, show_cv_windows=True):
     #convert to BGR
     image_undist_bgr = cv2.cvtColor(image_undist, cv2.COLOR_RGB2BGR)
 
-    #
+    #supply the next frame to the lane line extractor
     debug_image = lane_extractor.process_image(ptrans_image_white_and_yellow_bin)
 
+    # retreive left lane line information
     left_lane_exists, left_lane = lane_extractor.left_lane()
 
+    # retrieve right lane line information
     right_lane_exists, right_lane = lane_extractor.right_lane()
 
+    # this is the image on which I will draw the lane lines and other graphics (in the perspective transformed frame)
     lane_lines_p_frame = np.zeros_like(image_undist_bgr)
 
+    # if both lane lines exist, fill the area between them
     if left_lane_exists and right_lane_exists:
         fill_between_polys(lane_lines_p_frame, left_lane, right_lane)
 
+    # if the left lane exists, draw a red polynomial to represent it
     if left_lane_exists:
         draw_poly(lane_lines_p_frame, left_lane, width=30, colour=(0,0,255))
         
-
+    # if the right lane exists, draw a blue polynomial to represent it
     if right_lane_exists:
         draw_poly(lane_lines_p_frame, right_lane, width=30, colour=(255,0,0))
         ret, right_curv = lane_extractor.right_curvature()
     
+    # transform the image back into the original (undistorted) camera frame by applying the inverse perspective transform
     lanes_orig_frame = cv2.warpPerspective(lane_lines_p_frame, Minv, lane_lines_p_frame.shape[1::-1], cv2.INTER_LINEAR)
 
+    # blend the graphics into the original image
     lanes_orig_frame = cv2.addWeighted(image_undist_bgr, 1.0, lanes_orig_frame, 1.0, 0.0)
 
     # calculate and draw curvature values
-
     left_curv_exists, left_curv = lane_extractor.left_curvature()
     right_curv_exists, right_curv = lane_extractor.right_curvature()
 
@@ -163,11 +170,11 @@ if display_video_mode or photo_mode:
 
             plt.show()
 
-
         elif display_video_mode:
             lanes_orig_frame, debug_image = get_images(image, show_cv_windows=True)
 
 if write_video_mode:
+    # use this mode to write a video to disk for the purposes of video submission.
         
     from moviepy.editor import VideoFileClip
 
